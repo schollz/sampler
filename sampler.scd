@@ -259,6 +259,9 @@ s.waitForBoot({
 			\sliceDurationBeats, 100,
 			\bpmSource, 170,
 			\bpmTarget, 120, 
+			\effectTimestretchStart, 1,
+			\effectTimestretchEnd, 8,
+			\effectTimestretchBeats, 8, 
 		);
 		Routine {
 			inf.do({
