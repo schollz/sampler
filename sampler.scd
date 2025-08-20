@@ -31,6 +31,9 @@ s.waitForBoot({
 			effectCombOut,
 			effectDelay = 0.0,
 			effectReverse = 0,
+			effectTimestretchStart = 0,
+			effectTimestretchEnd = 0,
+			effectTimestretchBeats = 0,
 			effectReverb = 0.0,
 			effectReverbOut
 			;
@@ -40,24 +43,37 @@ s.waitForBoot({
 			var retrigTrig, retrigCount;
 			var frames=BufFrames.ir(buf);
 			var seconds=BufDur.ir(buf)*bpmSource/bpmTarget;
+			var sliceSeconds = seconds / sliceCount;
 			var pos = 0.0;
 			var sliceTrigger = t_trig;
 			var beatDuration = 60 / bpmTarget;
 			var retrigCountFeedback = 0;
+			var timestretchPos, timestretchRate, effectTimestretch;
 
 			sliceNum = sliceNum.mod(sliceCount);
 			// convert slice beat to seconds
-			pos = sliceNum / sliceCount;
 			pos = Select.kr(effectReverse>0,[
 				sliceNum / sliceCount,
 				((sliceNum+1).mod(sliceCount))/sliceCount
 			]);
 
+			// set effectTimestretch to beginning if it is 0
+			effectTimestretchEnd = Select.kr(effectTimestretchEnd< 0.001,[
+				effectTimestretchEnd,
+				effectTimestretchStart,
+			]);
+			effectTimestretch = Line.kr(effectTimestretchStart, effectTimestretchEnd, effectTimestretchBeats*beatDuration);
+			timestretchRate = Select.ar(effectTimestretch>1,[
+				DC.ar(pos*frames),
+				Phasor.ar(trig:TDelay.ar(Impulse.ar(0, 0),0),rate:rate/effectTimestretch,start:0,end:frames,resetPos:(pos*frames)).floor,
+			]);
+
+
 			// make sure retrigRateEnd is at least retrigRateStart
 			retrigRateEnd = Select.kr(retrigRateEnd < retrigRateStart, [retrigRateEnd, retrigRateStart]);
 
 			// if sliceDurationBeats = 0, make it infinite
-			sliceDurationBeats = Select.kr(sliceDurationBeats < 0.001, [sliceDurationBeats, 1e3]);
+			sliceDurationBeats = Select.kr(sliceDurationBeats < 0.001, [sliceDurationBeats, (seconds/sliceCount)/(60/bpmSource)]);
 
 			// Calculate rate
 			rate = rate*BufRateScale.ir(buf)*bpmTarget/bpmSource;
@@ -84,6 +100,11 @@ s.waitForBoot({
 			// Change volume based on retrigger
 			volumeDB = volumeDB + (A2K.kr(retrigCount) * retrigVolumeChange);
 
+
+			// do timestretching
+			sliceTrigger = sliceTrigger + ((effectTimestretch>1)*Impulse.ar(effectTimestretch/sliceSeconds));
+
+
 			// Determine whether to toggle playback
 			aOrB=ToggleFF.ar(sliceTrigger);
 			crossfade=VarLag.ar(K2A.ar(aOrB),xfade,warp:\sine);
@@ -92,13 +113,13 @@ s.waitForBoot({
 				trig:(1-aOrB),
 				rate:rate,
 				end:frames,
-				resetPos:pos*frames,
+				resetPos:timestretchRate,
 			);
 			posB=Phasor.ar(
 				trig:aOrB,
 				rate:rate,
 				end:frames,
-				resetPos:pos*frames,
+				resetPos:timestretchRate,
 			);
 			snd=(BufRd.ar(
 				numChannels:2,
@@ -117,8 +138,6 @@ s.waitForBoot({
 
 			// slice envelope
 			snd = snd * EnvGen.ar(Env.new([0,1,1,0],[sliceAttackBeats,sliceDurationBeats,sliceReleaseBeats]*beatDuration,[-4,4]), sliceTrigger);
-
-			// Comb filter processing removed from here
 
 			DetectSilence.ar(snd,time:1,doneAction:2);
 
@@ -157,7 +176,7 @@ s.waitForBoot({
 				drive: 0.5,
 				oversample: 2,
 			);
-			ReplaceOut.ar(0,snd*0.01);
+			ReplaceOut.ar(0,snd*1);
 		}).add;
 
 		s.sync;
@@ -245,6 +264,8 @@ s.waitForBoot({
 
 		};
 
+
+
 		o = OSCFunc({ |msg|
 			var filename = msg[1];
 			msg.postln;
@@ -259,7 +280,36 @@ s.waitForBoot({
 			});
 		},'/sampler');
 		["loaded",NetAddr.langPort, NetAddr.localAddr].postln;
-	}.play;
 
+		s.sync;
+		// testing
+		Buffer.read(s,"amen_5c2d11c8_beats16_bpm170.flac",action: { |b|
+			["playing",b].postln;
+			Synth.head(s,"sampler",[
+				buf:b,
+				effectDryOut: ~busDry,
+				effectCombOut: ~busComb,
+				effectReverbOut: ~busReverb,
+				bpmSource: 170.0,
+				bpmTarget: 180.0,
+				sliceCount: 32.0,
+				sliceNum: 30,
+				sliceDurationBeats: 1000,
+				effectTimestretchStart: 1,
+				effectTimestretchEnd: 16,
+				effectTimestretchBeats: 16,
+
+			]).onFree({
+				[b,"freed"].postln;
+			})
+		});
+		Routine {
+			inf.do({
+				1.sleep;
+				// print out the cpu usage
+				["cpu usage", s.avgCPU, s.peakCPU].postln;
+			});
+		}.play;
+	}.play;
 });
 )
