@@ -204,32 +204,17 @@ s.waitForBoot({
 		s.sync;
 		~sampleCache = Dictionary.new();
 		~synthsPlaying = Dictionary.new();
+
+
 		~playFromMsg = {
 			arg msg, b;
-			var filename = msg[1].asString;
-			var volumeDB = msg[2].asFloat;
-			var rate = msg[3].asFloat;
-			var pitch = msg[4].asFloat;
-			var xfade = msg[5].asFloat;
-			var bpmSource = msg[6].asFloat;
-			var bpmTarget = msg[7].asFloat;
-			var retrigNumTotal = msg[8].asFloat;
-			var retrigRateChangeBeats = msg[9].asFloat;
-			var retrigRateStart = msg[10].asFloat;
-			var retrigRateEnd = msg[11].asFloat;
-			var retrigPitchChange = msg[12].asFloat;
-			var retrigVolumeChange = msg[13].asFloat;
-			var sliceAttackBeats = msg[14].asFloat;
-			var sliceDurationBeats = msg[15].asFloat;
-			var sliceReleaseBeats = msg[16].asFloat;
-			var sliceNum = msg[17].asFloat;
-			var sliceCount = msg[18].asFloat;
-			var effectDry = msg[19].asFloat;
-			var effectComb = msg[20].asFloat;
-			var effectDelay = msg[21].asFloat;
-			var effectReverb = msg[22].asFloat;
-			var effectReverse = msg[23].asFloat;
 			var synName = 1000000.rand.asString;
+			var args = [
+				\buf,b, 
+				\effectDryOut, ~busDry,
+				\effectCombOut, ~busComb,
+				\effectReverbOut, ~busReverb,
+			];
 			// stop all currently playing synths
 			~synthsPlaying.values.do({
 				arg syn;
@@ -239,43 +224,17 @@ s.waitForBoot({
 					});
 				});
 			});
+			// add msg[2:] array to args
+			args = args ++ msg[2..];
+
 			~synthsPlaying.put(synName,
-				Synth.head(s,"sampler",[
-					buf:b,
-					effectDryOut: ~busDry,
-					effectCombOut: ~busComb,
-					effectReverbOut: ~busReverb,
-					volumeDB: volumeDB,
-					rate: rate,
-					pitch:pitch,
-					xfade:xfade,
-					bpmSource: bpmSource,
-					bpmTarget: bpmTarget,
-					retrigRateStart: retrigRateStart,
-					retrigRateEnd: retrigRateEnd,
-					retrigRateChangeBeats: retrigRateChangeBeats,
-					retrigNumTotal: retrigNumTotal,
-					retrigPitchChange: retrigPitchChange,
-					retrigVolumeChange: retrigVolumeChange,
-					sliceAttackBeats: sliceAttackBeats,
-					sliceDurationBeats: sliceDurationBeats,
-					sliceReleaseBeats: sliceReleaseBeats,
-					sliceNum: sliceNum,
-					sliceCount: sliceCount,
-					effectDry: effectDry,
-					effectComb: effectComb,
-					effectDelay: effectDelay,
-					effectReverb: effectReverb,
-					effectReverse: effectReverse,
-				]).onFree({
+				Synth.head(s,"sampler",args).onFree({
 					[b,"freed"].postln;
 					~synthsPlaying.removeAt(synName);
 				});
 			);
 
 		};
-
-
 
 		o = OSCFunc({ |msg|
 			var filename = msg[1];
@@ -293,30 +252,14 @@ s.waitForBoot({
 		["loaded",NetAddr.langPort, NetAddr.localAddr].postln;
 
 		s.sync;
-		// testing
-		Buffer.read(s,"amen_5c2d11c8_beats16_bpm170.flac",action: { |b|
-			["playing",b].postln;
-			Synth.head(s,"sampler",[
-				buf:b,
-				effectDryOut: ~busDry,
-				effectCombOut: ~busComb,
-				effectReverbOut: ~busReverb,
-				bpmSource: 170.0,
-				bpmTarget: 180.0,
-				sliceCount: 32.0,
-				sliceNum: 29,
-				sliceDurationBeats: 1000,
-				effectTimestretchStart: 1,
-				effectTimestretchEnd: 8,
-				effectTimestretchBeats: 0.5,
-				effectLPFStart: 100,
-				effectLPFEnd: 20000,
-				effectLPFBeats: 3,
-
-			]).onFree({
-				[b,"freed"].postln;
-			})
-		});
+		0.1.wait;
+		NetAddr.new("127.0.0.1", NetAddr.langPort).sendMsg("/sampler", "amen_5c2d11c8_beats16_bpm170.flac",
+			\sliceCount, 32,
+			\sliceNum, 29,
+			\sliceDurationBeats, 100,
+			\bpmSource, 170,
+			\bpmTarget, 120, 
+		);
 		Routine {
 			inf.do({
 				1.sleep;
