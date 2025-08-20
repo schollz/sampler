@@ -35,6 +35,9 @@ s.waitForBoot({
 			effectTimestretchEnd = 0,
 			effectTimestretchBeats = 0,
 			effectReverb = 0.0,
+			effectLPFStart = 20000,
+			effectLPFEnd = 0,
+			effectLPFBeats = 0,
 			effectReverbOut
 			;
 			var snd,sndA,sndB,crossfade,aOrB;
@@ -57,6 +60,11 @@ s.waitForBoot({
 				((sliceNum+1).mod(sliceCount))/sliceCount
 			]);
 
+			// set effectLPFEnd to effectLPFStart if it is 0
+			effectLPFEnd = Select.kr(effectLPFEnd < 0.001, [
+				effectLPFEnd,
+				effectLPFStart,
+			]);
 			// set effectTimestretch to beginning if it is 0
 			effectTimestretchEnd = Select.kr(effectTimestretchEnd< 0.001,[
 				effectTimestretchEnd,
@@ -139,6 +147,9 @@ s.waitForBoot({
 			// slice envelope
 			snd = snd * EnvGen.ar(Env.new([0,1,1,0],[sliceAttackBeats,sliceDurationBeats,sliceReleaseBeats]*beatDuration,[-4,4]), sliceTrigger);
 
+
+			// filtering 
+			snd = RLPF.ar(snd, XLine.kr(effectLPFStart, effectLPFEnd, effectLPFBeats*beatDuration), 0.303);
 			DetectSilence.ar(snd,time:1,doneAction:2);
 
 			// Feedback
@@ -293,11 +304,14 @@ s.waitForBoot({
 				bpmSource: 170.0,
 				bpmTarget: 180.0,
 				sliceCount: 32.0,
-				sliceNum: 30,
+				sliceNum: 29,
 				sliceDurationBeats: 1000,
 				effectTimestretchStart: 1,
-				effectTimestretchEnd: 16,
-				effectTimestretchBeats: 16,
+				effectTimestretchEnd: 8,
+				effectTimestretchBeats: 0.5,
+				effectLPFStart: 100,
+				effectLPFEnd: 20000,
+				effectLPFBeats: 3,
 
 			]).onFree({
 				[b,"freed"].postln;
