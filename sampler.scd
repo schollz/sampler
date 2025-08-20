@@ -187,7 +187,7 @@ s.waitForBoot({
 				drive: 0.5,
 				oversample: 2,
 			);
-			ReplaceOut.ar(0,snd*1);
+			ReplaceOut.ar(0,snd*0.5);
 		}).add;
 
 		s.sync;
@@ -252,22 +252,37 @@ s.waitForBoot({
 		["loaded",NetAddr.langPort, NetAddr.localAddr].postln;
 
 		s.sync;
-		0.1.wait;
-		NetAddr.new("127.0.0.1", NetAddr.langPort).sendMsg("/sampler", "amen_5c2d11c8_beats16_bpm170.flac",
-			\sliceCount, 32,
-			\sliceNum, 29,
-			\sliceDurationBeats, 100,
-			\bpmSource, 170,
-			\bpmTarget, 120, 
-			\effectTimestretchStart, 1,
-			\effectTimestretchEnd, 8,
-			\effectTimestretchBeats, 8, 
-		);
 		Routine {
 			inf.do({
 				1.sleep;
 				// print out the cpu usage
 				["cpu usage", s.avgCPU, s.peakCPU].postln;
+			});
+		}.play;
+
+		~bpmTarget = 180;
+		~sliceNum = 32;
+		Routine {
+			inf.do({ arg beat;
+				var sliceNum = beat.mod(~sliceNum);
+				["playing",beat].postln;
+				NetAddr.new("127.0.0.1", NetAddr.langPort).sendMsg("/sampler", "amen_5c2d11c8_beats16_bpm170.flac",
+					\sliceCount, 32,
+					\sliceNum, sliceNum,
+					\sliceDurationBeats, 100,
+					\bpmSource, 170,
+					\bpmTarget, ~bpmTarget, 
+					\effectTimestretchStart, 3.rand,
+					\effectTimestretchEnd, 8.rand,
+					\effectTimestretchBeats, 8.rand,
+					\retrigNumTotal, 16.rand,
+					\retrigRateStart, 16.rand,
+					\retrigPitchChange,-1,
+					\retrigVolumeChange,-2,
+					\effectComb, (100.rand)/100.0,
+				);
+
+				(60/~bpmTarget/2).wait;
 			});
 		}.play;
 	}.play;
