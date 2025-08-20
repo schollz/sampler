@@ -16,7 +16,7 @@ from pythonosc import udp_client
 def send_sampler_osc(
     filename,
     host="127.0.0.1",
-    port=57121,
+    port=57120,
     volume_db=0.0,
     rate=1.0,
     pitch=0.0,
@@ -38,6 +38,7 @@ def send_sampler_osc(
     effect_comb=0.0,
     effect_delay=0.0,
     effect_reverb=0.0,
+    effect_reverse=0,
 ):
     try:
         # Create OSC client
@@ -74,6 +75,7 @@ def send_sampler_osc(
                 effect_comb,  # msg[22]
                 effect_delay,  # msg[23]
                 effect_reverb,  # msg[24]
+                effect_reverse,  # msg[25]
             ],
         )
 
@@ -107,6 +109,7 @@ if __name__ == "__main__":
         volume_db = 0
         effect_comb = 0
         effect_reverb = 0
+        effect_reverse = 1 if random.randint(1, 16) < 2 else 0
         slice = i % 16
         if random.randint(1, 8) < 2:
             retrigger_num_total = random.randint(1, 64)
@@ -131,7 +134,7 @@ if __name__ == "__main__":
             effect_reverb = 1.0
             print("REVERB")
         send_sampler_osc(
-            filename="/home/zns/Documents/supercollisions/amen_0efedaab_beats8_bpm165.flac",
+            filename="amen_5c2d11c8_beats16_bpm170.flac",
             volume_db=volume_db,
             bpm_source=165,
             bpm_target=bpm_target,
@@ -145,5 +148,6 @@ if __name__ == "__main__":
             effect_comb=effect_comb,
             effect_reverb=effect_reverb,
             slice_duration_beats=8,
+            effect_reverse=effect_reverse,
         )
         time.sleep(beat_duration)

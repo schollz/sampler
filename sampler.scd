@@ -11,7 +11,7 @@ s.waitForBoot({
 			gate = 1,
 			t_trig = 1,
 			xfade=0.01,
-			bpmSource=120, 
+			bpmSource=120,
 			bpmTarget=120,
 			// retriggering
 			retrigNumTotal=0,
@@ -30,6 +30,7 @@ s.waitForBoot({
 			effectComb = 0.0,
 			effectCombOut,
 			effectDelay = 0.0,
+			effectReverse = 0,
 			effectReverb = 0.0,
 			effectReverbOut
 			;
@@ -43,49 +44,59 @@ s.waitForBoot({
 			var sliceTrigger = t_trig;
 			var beatDuration = 60 / bpmTarget;
 			var retrigCountFeedback = 0;
-			
+
 			sliceNum = sliceNum.mod(sliceCount);
 			// convert slice beat to seconds
 			pos = sliceNum / sliceCount;
-			
+			pos = Select.kr(effectReverse>0,[
+				sliceNum / sliceCount,
+				((sliceNum+1).mod(sliceCount))/sliceCount
+			]);
+
 			// make sure retrigRateEnd is at least retrigRateStart
 			retrigRateEnd = Select.kr(retrigRateEnd < retrigRateStart, [retrigRateEnd, retrigRateStart]);
-			
+
 			// if sliceDurationBeats = 0, make it infinite
 			sliceDurationBeats = Select.kr(sliceDurationBeats < 0.001, [sliceDurationBeats, 1e3]);
-			
+
 			// Calculate rate
 			rate = rate*BufRateScale.ir(buf)*bpmTarget/bpmSource;
 			// Calculate pitch
 			rate = rate * (2 ** (pitch/12.0));
-			
+
 			// Calculate retriggers
 			retrigCountFeedback = LocalIn.ar(1);
 			retrigTrig = Impulse.ar(XLine.ar(retrigRateStart,retrigRateEnd,beatDuration*retrigRateChangeBeats) / beatDuration);
 			retrigCount = PulseCount.ar(retrigTrig * (retrigCountFeedback<retrigNumTotal));
 			sliceTrigger = sliceTrigger + (retrigTrig*(retrigCount<retrigNumTotal));
-			
+
 			// Increase pitch based on retrigger
 			// rate = rate * (2 ** (retrigCount / 12));
 			// Lower pitch based on retrigger
 			rate = rate * (2 ** (retrigPitchChange * (retrigCount / 12)));
-			
+			rate = rate.abs;
+			// Do reverse
+			rate = Select.kr(effectReverse>0,[
+				rate,
+				rate * -1,
+			]);
+
 			// Change volume based on retrigger
 			volumeDB = volumeDB + (A2K.kr(retrigCount) * retrigVolumeChange);
-			
+
 			// Determine whether to toggle playback
 			aOrB=ToggleFF.ar(sliceTrigger);
 			crossfade=VarLag.ar(K2A.ar(aOrB),xfade,warp:\sine);
-			
+
 			posA=Phasor.ar(
 				trig:(1-aOrB),
-				rate:rate.abs,
+				rate:rate,
 				end:frames,
 				resetPos:pos*frames,
 			);
 			posB=Phasor.ar(
 				trig:aOrB,
-				rate:rate.abs,
+				rate:rate,
 				end:frames,
 				resetPos:pos*frames,
 			);
@@ -98,15 +109,15 @@ s.waitForBoot({
 				bufnum:buf,
 				phase:posB,
 			)*(1-crossfade));
-			
+
 			snd = snd * Lag.kr(volumeDB.dbamp,0.2);
-			
+
 			// full envelope
 			snd = snd * EnvGen.ar(Env.adsr(xfade,0.0,1.0,xfade,curve:\sine),gate,doneAction:2);
-			
+
 			// slice envelope
 			snd = snd * EnvGen.ar(Env.new([0,1,1,0],[sliceAttackBeats,sliceDurationBeats,sliceReleaseBeats]*beatDuration,[-4,4]), sliceTrigger);
-			
+
 			// Comb filter processing removed from here
 
 			DetectSilence.ar(snd,time:1,doneAction:2);
@@ -125,7 +136,7 @@ s.waitForBoot({
 			var sndDry = In.ar(busDry,2) * Lag.kr(volumeDB.dbamp,2);
 			var sndComb = In.ar(busComb,2) * Lag.kr(volumeDB.dbamp,2);
 			var snd = 				sndDry;
-			
+
 			// add in comb
 			snd = snd + ((0.5*sndComb)+
 					Pan2.ar(CombN.ar(sndComb[0], 0.02, Rand(0.01,0.06), Rand(1,2)),-1,0.9) +
@@ -138,7 +149,7 @@ s.waitForBoot({
 					snd + Fverb.ar(sndWet[0],sndWet[1],200,tail_density: LFNoise2.ar(1/3).range(50,90),decay: LFNoise2.ar(1/3).range(50,70))
 				]
 			);
-			
+
 			snd = RHPF.ar(snd,60,0.303);
 			snd = AnalogTape.ar(snd,
 				bias: 0.5,
@@ -146,9 +157,9 @@ s.waitForBoot({
 				drive: 0.5,
 				oversample: 2,
 			);
-			ReplaceOut.ar(0,snd*4);
+			ReplaceOut.ar(0,snd*0.01);
 		}).add;
-		
+
 		s.sync;
 		~busDry = Bus.audio(s, 2);
 		~busReverb = Bus.audio(s, 2);
@@ -187,6 +198,7 @@ s.waitForBoot({
 			var effectComb = msg[20].asFloat;
 			var effectDelay = msg[21].asFloat;
 			var effectReverb = msg[22].asFloat;
+			var effectReverse = msg[23].asFloat;
 			var synName = 1000000.rand.asString;
 			// stop all currently playing synths
 			~synthsPlaying.values.do({
@@ -224,6 +236,7 @@ s.waitForBoot({
 					effectComb: effectComb,
 					effectDelay: effectDelay,
 					effectReverb: effectReverb,
+					effectReverse: effectReverse,
 				]).onFree({
 					[b,"freed"].postln;
 					~synthsPlaying.removeAt(synName);
