@@ -2,6 +2,19 @@
 s.waitForBoot({
 	Routine{
 		~serverLatency = 0.1;
+		~synthPlayback = nil;
+		2.do({
+			arg ch;
+			SynthDef("playback"++(ch+1),{
+				arg out,buf,gate = 1;
+				var env = EnvGen.ar(Env.adsr(0.01,0.0,1.0,0.2),gate,doneAction:2);
+				var snd = PlayBuf.ar(ch+1, buf, BufRateScale.kr(buf), loop: 0, doneAction:2);
+				if (ch<1,{
+					snd = Pan2.ar(snd,0);
+				});
+				Out.ar(out, (snd*env));
+			}).add;
+		});
 
 		SynthDef("sampler",{
 			arg buf,
@@ -242,13 +255,37 @@ s.waitForBoot({
 			if (~sampleCache.at(filename).isNil,{
 				// load sample
 				~sampleCache.put(filename, Buffer.read(s,filename,action:{ |b|
-					["loaded",b].postln;
+					["loaded",b,b.numChannels].postln;
 					~playFromMsg.(msg,b);
 				}));
 			},{
 				~playFromMsg.(msg,~sampleCache.at(filename));
 			});
 		},'/sampler');
+		OSCFunc({ |msg|
+			var filename = msg[1];
+			var gate = msg[2].asInteger;
+			msg.postln;
+			if (~synthPlayback.notNil,{
+				if (~synthPlayback.isPlaying,{
+					[~synthPlayback,"stopped"].postln;
+					~synthPlayback.set(\gate,0);
+				});
+			});
+			if (gate>0,{
+				Buffer.read(s,filename,action:{ |b|
+					~synthPlayback = Synth.head(s,"playback"++(b.numChannels),[
+						\buf,b,
+						\out,~busDry,
+						\gate,1,
+					]).onFree({
+						[b,"freed"].postln;
+						b.free;
+					});
+					NodeWatcher.register(~synthPlayback);
+				});
+			});
+		},'/playback');
 		["loaded",NetAddr.langPort, NetAddr.localAddr].postln;
 
 		s.sync;
@@ -260,31 +297,31 @@ s.waitForBoot({
 			});
 		}.play;
 
-		~bpmTarget = 180;
-		~sliceNum = 32;
-		Routine {
-			inf.do({ arg beat;
-				var sliceNum = beat.mod(~sliceNum);
-				["playing",beat].postln;
-				NetAddr.new("127.0.0.1", NetAddr.langPort).sendMsg("/sampler", "amen_5c2d11c8_beats16_bpm170.flac",
-					\sliceCount, 32,
-					\sliceNum, sliceNum,
-					\sliceDurationBeats, 100,
-					\bpmSource, 170,
-					\bpmTarget, ~bpmTarget, 
-					\effectTimestretchStart, 3.rand,
-					\effectTimestretchEnd, 8.rand,
-					\effectTimestretchBeats, 8.rand,
-					\retrigNumTotal, 16.rand,
-					\retrigRateStart, 16.rand,
-					\retrigPitchChange,-1,
-					\retrigVolumeChange,-2,
-					\effectComb, (100.rand)/100.0,
-				);
+		// ~bpmTarget = 180;
+		// ~sliceNum = 32;
+		// Routine {
+		// 	inf.do({ arg beat;
+		// 		var sliceNum = beat.mod(~sliceNum);
+		// 		["playing",beat].postln;
+		// 		NetAddr.new("127.0.0.1", NetAddr.langPort).sendMsg("/sampler", "amen_5c2d11c8_beats16_bpm170.flac",
+		// 			\sliceCount, 32,
+		// 			\sliceNum, sliceNum,
+		// 			\sliceDurationBeats, 100,
+		// 			\bpmSource, 170,
+		// 			\bpmTarget, ~bpmTarget, 
+		// 			\effectTimestretchStart, 3.rand,
+		// 			\effectTimestretchEnd, 8.rand,
+		// 			\effectTimestretchBeats, 8.rand,
+		// 			\retrigNumTotal, 16.rand,
+		// 			\retrigRateStart, 16.rand,
+		// 			\retrigPitchChange,-1,
+		// 			\retrigVolumeChange,-2,
+		// 			\effectComb, (100.rand)/100.0,
+		// 		);
 
-				(60/~bpmTarget/2).wait;
-			});
-		}.play;
+		// 		(60/~bpmTarget/2).wait;
+		// 	});
+		// }.play;
 	}.play;
 });
 )
